@@ -1,0 +1,6 @@
+dist/
+inspection.txt
+*.tmp.js
+*.b64.txt
+node_modules/
+.claude/
