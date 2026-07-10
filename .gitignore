@@ -1,5 +1,7 @@
 dist/
 inspection.txt
+elementforscreen.txt
+MARKETING_BRIEF.md
 *.tmp.js
 *.b64.txt
 node_modules/
