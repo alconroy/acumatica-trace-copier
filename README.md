@@ -20,9 +20,30 @@ Unofficial project — not affiliated with, endorsed by, or sponsored by Acumati
 On an Acumatica trace page (any page containing "Exception Type:", "Stack Trace:", or "Last Requests"), a floating button appears bottom-right:
 
 - **📋 Copy Exceptions** — auto-expands all "Show more" links and the "Expand All" toggle, finds every exception block, and copies them all as numbered plain text.
+- **🤖 Copy for AI** — same as above, but prepends your configurable AI prompt so the result is ready to paste straight into Claude or any AI assistant.
 - **🎯 Pick element** — crosshair mode; click any panel (Messages tab, SQL tab, a single exception card, an iframe body, etc.) to copy just that element's text. Press Esc to cancel.
 
-The toolbar icon opens the same two actions as a popup, useful if the floating button was dismissed or the trace panel is inside an iframe.
+The toolbar icon opens the same actions as a popup, useful if the floating button was dismissed or the trace panel is inside an iframe.
+
+### Request context
+
+On the trace screen, the copied header also includes which request caused the error — screen ID, request type, command, start time and duration — read from the trace request grid. If the row you have selected is the errored one, that row is used; otherwise the extension falls back to the rows flagged with errors, and lists all of them if there's more than one.
+
+Acumatica only renders the details panel for the row you have selected, so if the errored request isn't the selected one, its exceptions aren't in the page at all. In that case the extension selects each errored row automatically, waits for the panel to load (switching to the EXCEPTIONS tab if needed), and copies every errored request's exceptions in one go, grouped per request. If the panel doesn't load in time, a toast tells you which row to click manually.
+
+### AI prompt settings
+
+Open **⚙️ AI prompt settings** from the popup (or the extension's options page). Choose one of the built-in presets or write your own prompt. Placeholders are filled in from the trace page at copy time:
+
+| Placeholder | Filled with |
+|---|---|
+| `{screenId}` | Acumatica screen ID, e.g. `SO301000` |
+| `{command}` | The action that ran, e.g. `RecalculatePackages` |
+| `{requestType}` | Request type, e.g. `Screen` |
+| `{count}` | Number of exceptions captured |
+| `{url}` | The page URL |
+
+The prompt is saved via `chrome.storage.sync`, so it follows you across Chrome profiles on the same account.
 
 ## How detection works
 

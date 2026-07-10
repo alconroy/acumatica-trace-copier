@@ -32,6 +32,14 @@
   background: #1558b3;
 }
 
+#acu-copy-fab-root button.acu-ai {
+  background: #7c3aed;
+}
+
+#acu-copy-fab-root button.acu-ai:hover {
+  background: #6428c9;
+}
+
 #acu-copy-fab-root button.acu-secondary {
   background: #444;
   font-size: 12px;
