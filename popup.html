@@ -27,8 +27,21 @@
     font-weight: 600;
     cursor: pointer;
   }
+  button.ai {
+    background: #7c3aed;
+  }
   button.secondary {
     background: #444;
+  }
+  a.settings {
+    display: inline-block;
+    font-size: 11px;
+    color: #666;
+    margin-top: 6px;
+    text-decoration: none;
+  }
+  a.settings:hover {
+    color: #1a73e8;
   }
   p {
     font-size: 11px;
@@ -46,9 +59,11 @@
 <body>
   <h1>Acumatica Trace Copier</h1>
   <button id="copyAll">📋 Copy All Exceptions</button>
+  <button id="copyAi" class="ai">🤖 Copy for AI</button>
   <button id="pick" class="secondary">🎯 Pick Element</button>
   <div id="status"></div>
-  <p>On an Acumatica trace page, a floating button also appears automatically. "Pick Element" lets you click any panel (Messages, SQL, a single exception) to copy just that.</p>
+  <p>On an Acumatica trace page, a floating button also appears automatically. "Copy for AI" adds your configurable prompt above the trace. "Pick Element" lets you click any panel (Messages, SQL, a single exception) to copy just that.</p>
+  <a href="#" id="openOptions" class="settings">⚙️ AI prompt settings</a>
 </body>
 <script src="popup.js"></script>
 </html>

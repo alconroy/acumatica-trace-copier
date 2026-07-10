@@ -24,7 +24,7 @@
 
   // ---------- toast ----------
   let toastEl = null;
-  function showToast(msg) {
+  function showToast(msg, duration = 2500) {
     if (!toastEl) {
       toastEl = document.createElement('div');
       toastEl.id = 'acu-copy-toast';
@@ -33,7 +33,7 @@
     toastEl.textContent = msg;
     toastEl.classList.add('acu-visible');
     clearTimeout(showToast._t);
-    showToast._t = setTimeout(() => toastEl.classList.remove('acu-visible'), 2500);
+    showToast._t = setTimeout(() => toastEl.classList.remove('acu-visible'), duration);
   }
 
   // ---------- text cleanup ----------
@@ -82,6 +82,81 @@
       }
       await sleep(80);
     }
+  }
+
+  // ---------- trace grid context (screen / request type / command) ----------
+  // The trace screen's request grid renders rows as <tr class="data-line">
+  // with per-field cell classes (col-screenId, col-requestType, col-command…).
+  // Rows whose request errored carry the "error" class; the row driving the
+  // messages panel below carries selected="true".
+  function readRowContext(tr) {
+    const cell = cls => {
+      const td = tr.querySelector('td.col-' + cls);
+      return td ? td.textContent.replace(/\s+/g, ' ').trim() : '';
+    };
+    return {
+      screenId: cell('screenId'),
+      requestType: cell('requestType'),
+      command: cell('command'),
+      startTime: cell('startTime'),
+      duration: cell('duration')
+    };
+  }
+
+  function formatRowContext(ctx) {
+    const parts = [];
+    if (ctx.screenId) parts.push(`Screen: ${ctx.screenId}`);
+    if (ctx.requestType) parts.push(`Request Type: ${ctx.requestType}`);
+    if (ctx.command) parts.push(`Command: ${ctx.command}`);
+    if (ctx.startTime) parts.push(`Started: ${ctx.startTime}`);
+    if (ctx.duration) parts.push(`Duration: ${ctx.duration} ms`);
+    return parts.join(' | ');
+  }
+
+  function getTraceContext() {
+    const rows = Array.from(document.querySelectorAll('tr.data-line'));
+    const errorRows = rows.filter(r => r.classList.contains('error'));
+    const selected = rows.find(r => r.getAttribute('selected') === 'true');
+
+    // Prefer the selected row when it errored — its exceptions are the ones
+    // shown in the panel. Otherwise fall back to the first error row, then to
+    // whatever row is selected.
+    let primaryRow = null;
+    if (selected && selected.classList.contains('error')) primaryRow = selected;
+    else if (errorRows.length > 0) primaryRow = errorRows[0];
+    else if (selected) primaryRow = selected;
+
+    return {
+      primary: primaryRow ? readRowContext(primaryRow) : null,
+      errorRows: errorRows.map(readRowContext)
+    };
+  }
+
+  // ---------- AI prompt ----------
+  function getAiPrompt() {
+    return new Promise(resolve => {
+      try {
+        chrome.storage.sync.get({ aiPrompt: ACU_DEFAULT_PROMPT }, data => {
+          resolve((data && data.aiPrompt) || ACU_DEFAULT_PROMPT);
+        });
+      } catch (e) {
+        resolve(ACU_DEFAULT_PROMPT);
+      }
+    });
+  }
+
+  function fillPromptTemplate(template, ctx, count) {
+    const values = {
+      screenId: (ctx && ctx.screenId) || 'unknown',
+      requestType: (ctx && ctx.requestType) || 'unknown',
+      command: (ctx && ctx.command) || 'unknown',
+      count: String(count),
+      url: location.href
+    };
+    return template.replace(
+      /\{(screenId|requestType|command|count|url)\}/g,
+      (m, key) => values[key]
+    );
   }
 
   // ---------- exception card detection (Acumatica/Aurelia trace panel) ----------
@@ -160,8 +235,66 @@
     return arr.filter(c => !arr.some(other => other !== c && other.contains(c)));
   }
 
+  // ---------- auto-selecting errored grid rows ----------
+  // Acumatica only renders the details panel (and its exception blocks) for
+  // the grid row that is currently selected. If nothing is rendered but the
+  // grid has rows flagged with errors, select each of those rows in turn and
+  // wait for the panel to load before extracting.
+  function getErrorRowElements() {
+    return Array.from(document.querySelectorAll('tr.data-line.error'));
+  }
+
+  async function waitFor(test, timeout, interval = 120) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      if (test()) return true;
+      await sleep(interval);
+    }
+    return test();
+  }
+
+  function renderedExceptionsSnapshot() {
+    return findExceptionMessageItems(document.body).map(extractExceptionCard).join('\n\n');
+  }
+
+  function synthClick(el) {
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  }
+
+  function clickElementWithText(text) {
+    const candidates = Array.from(
+      document.body.querySelectorAll('a, button, span, div, li')
+    ).filter(el => (el.textContent || '').trim() === text);
+    if (candidates.length === 0) return false;
+    // querySelectorAll is document order, so nested wrappers sharing the same
+    // trimmed text put the innermost element last — click that one.
+    synthClick(candidates[candidates.length - 1]);
+    return true;
+  }
+
+  async function selectErrorRowAndWait(tr) {
+    const before = renderedExceptionsSnapshot();
+    if (tr.getAttribute('selected') !== 'true') {
+      synthClick(tr);
+      // Aurelia may reuse DOM nodes on re-render, so compare extracted text
+      // rather than node identity to detect the panel updating.
+      await waitFor(() => {
+        const now = renderedExceptionsSnapshot();
+        return now !== '' && (before === '' || now !== before);
+      }, 2500);
+    }
+    if (findExceptionMessageItems(document.body).length === 0) {
+      // The active tab may not show exceptions — try the EXCEPTIONS tab.
+      if (clickElementWithText('EXCEPTIONS')) {
+        await waitFor(() => findExceptionMessageItems(document.body).length > 0, 1500);
+      }
+    }
+    await expandAll(document.body);
+    return findExceptionMessageItems(document.body).map(extractExceptionCard);
+  }
+
   // ---------- main actions ----------
-  async function copyAllExceptions() {
+  async function copyAllExceptions(includeAiPrompt) {
     await expandAll(document.body);
 
     let items = findExceptionMessageItems(document.body);
@@ -172,21 +305,91 @@
       useGenericExtraction = true;
     }
 
-    if (items.length === 0) {
-      showToast('No exceptions found on this page. Try "Pick element" instead.');
-      return;
+    let bodies;
+    let sections = null; // per-request grouping when we auto-selected rows
+
+    if (items.length > 0) {
+      bodies = items.map(c =>
+        useGenericExtraction ? cleanText(c.innerText || '') : extractExceptionCard(c)
+      );
+    } else {
+      // Nothing rendered — the details panel only shows the selected row's
+      // messages. If the grid flags errored requests, select them ourselves.
+      const errorRows = getErrorRowElements();
+      if (errorRows.length === 0) {
+        showToast('No exceptions found on this page. Try "Pick element" instead.');
+        return;
+      }
+      showToast(`Loading exceptions from ${errorRows.length} errored request(s)…`);
+      sections = [];
+      for (const tr of errorRows) {
+        const rowBodies = await selectErrorRowAndWait(tr);
+        sections.push({ ctx: readRowContext(tr), bodies: rowBodies });
+      }
+      bodies = sections.flatMap(s => s.bodies);
+      if (bodies.length === 0) {
+        const hint = formatRowContext(sections[0].ctx);
+        showToast(
+          `Couldn't load the exception details automatically — click the errored row in the grid (${hint || 'red error icon'}), then copy again.`,
+          6000
+        );
+        return;
+      }
     }
 
-    const parts = items.map((c, i) => {
-      const body = useGenericExtraction ? cleanText(c.innerText || '') : extractExceptionCard(c);
-      return `--- Exception ${i + 1} of ${items.length} ---\n${body}`;
-    });
+    const count = bodies.length;
+    const context = getTraceContext();
+    const primaryCtx = sections
+      ? (sections.find(s => s.bodies.length > 0) || sections[0]).ctx
+      : context.primary;
 
-    const header = `Acumatica Trace — ${items.length} exception(s)\nURL: ${location.href}\nCaptured: ${new Date().toISOString()}\n`;
-    const text = `${header}\n${parts.join('\n\n')}`;
+    const headerLines = [`Acumatica Trace — ${count} exception(s)`];
+    if (!sections && primaryCtx) {
+      const line = formatRowContext(primaryCtx);
+      if (line) headerLines.push(line);
+    }
+    headerLines.push(`URL: ${location.href}`);
+    headerLines.push(`Captured: ${new Date().toISOString()}`);
+    if (!sections && context.errorRows.length > 1) {
+      headerLines.push('', `Requests with errors (${context.errorRows.length}):`);
+      context.errorRows.forEach((c, i) => {
+        headerLines.push(`  ${i + 1}. ${formatRowContext(c)}`);
+      });
+    }
+
+    let bodyText;
+    if (sections) {
+      let n = 0;
+      bodyText = sections
+        .map(s => {
+          const head = `=== Errored request — ${formatRowContext(s.ctx) || '(unknown request)'} ===`;
+          if (s.bodies.length === 0) {
+            return `${head}\n(couldn't load this request's exceptions automatically — select its row in the grid to view them)`;
+          }
+          const ex = s.bodies.map(b => `--- Exception ${++n} of ${count} ---\n${b}`);
+          return `${head}\n${ex.join('\n\n')}`;
+        })
+        .join('\n\n');
+    } else {
+      bodyText = bodies
+        .map((b, i) => `--- Exception ${i + 1} of ${count} ---\n${b}`)
+        .join('\n\n');
+    }
+
+    let text = `${headerLines.join('\n')}\n\n${bodyText}`;
+
+    if (includeAiPrompt) {
+      const template = await getAiPrompt();
+      const prompt = fillPromptTemplate(template, primaryCtx, count);
+      text = `${prompt}\n\n${text}`;
+    }
 
     await copyToClipboard(text);
-    showToast(`Copied ${items.length} exception(s) to clipboard`);
+    showToast(
+      includeAiPrompt
+        ? `Copied ${count} exception(s) + AI prompt`
+        : `Copied ${count} exception(s) to clipboard`
+    );
   }
 
   // ---------- picker mode ----------
@@ -250,7 +453,12 @@
 
     const mainBtn = document.createElement('button');
     mainBtn.textContent = '📋 Copy Exceptions';
-    mainBtn.addEventListener('click', () => copyAllExceptions());
+    mainBtn.addEventListener('click', () => copyAllExceptions(false));
+
+    const aiBtn = document.createElement('button');
+    aiBtn.className = 'acu-ai';
+    aiBtn.textContent = '🤖 Copy for AI';
+    aiBtn.addEventListener('click', () => copyAllExceptions(true));
 
     const pickBtn = document.createElement('button');
     pickBtn.className = 'acu-secondary';
@@ -266,6 +474,7 @@
     });
 
     fabRoot.appendChild(mainBtn);
+    fabRoot.appendChild(aiBtn);
     fabRoot.appendChild(pickBtn);
     fabRoot.appendChild(closeBtn);
     document.body.appendChild(fabRoot);
@@ -294,7 +503,9 @@
   // ---------- messages from popup ----------
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg === 'copy-all-exceptions') {
-      copyAllExceptions();
+      copyAllExceptions(false);
+    } else if (msg === 'copy-exceptions-ai') {
+      copyAllExceptions(true);
     } else if (msg === 'start-picker') {
       startPicking();
     }
