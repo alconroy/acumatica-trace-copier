@@ -6,6 +6,8 @@ Unofficial project — not affiliated with, endorsed by, or sponsored by Acumati
 
 ## Install
 
+[Check here to download from Chrome Web Store](https://tinyurl.com/AcumaticaTraceCopier)
+
 **From source (developer mode):**
 
 1. Clone or download this repo.
