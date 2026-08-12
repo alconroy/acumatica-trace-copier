@@ -33,11 +33,18 @@
   button.secondary {
     background: #444;
   }
+  .footer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+  }
   a.settings {
-    display: inline-block;
     font-size: 11px;
     color: #666;
-    margin-top: 6px;
     text-decoration: none;
   }
   a.settings:hover {
@@ -63,7 +70,10 @@
   <button id="pick" class="secondary">🎯 Pick Element</button>
   <div id="status"></div>
   <p>On an Acumatica trace page, a floating button also appears automatically. "Copy for AI" adds your configurable prompt above the trace. "Pick Element" lets you click any panel (Messages, SQL, a single exception) to copy just that.</p>
-  <a href="#" id="openOptions" class="settings">⚙️ AI prompt settings</a>
+  <div class="footer">
+    <a href="#" id="openOptions" class="settings">⚙️ AI prompt settings</a>
+    <a href="https://www.acugenconsulting.com/products" target="_blank" rel="noopener" class="settings">🎬 See our Acumatica products</a>
+  </div>
 </body>
 <script src="popup.js"></script>
 </html>
