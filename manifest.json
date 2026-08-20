@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Acumatica Trace Copier",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Copy Acumatica trace exceptions to the clipboard as clean text for debugging with Claude or any AI assistant.",
   "permissions": ["activeTab", "scripting", "clipboardWrite", "storage"],
   "options_ui": {
