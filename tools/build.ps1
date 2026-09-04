@@ -53,16 +53,28 @@ $ErrorActionPreference = 'Stop'
 # changing it makes AMO treat the result as a different extension and orphans
 # every user's synced storage.
 #
-# The version floors are set by data_collection_permissions below, which landed
-# in Firefox 140 on desktop and 142 on Android. Declaring a lower floor makes
-# AMO warn that the extension claims support for releases that would silently
-# ignore the data consent declaration. An earlier floor of 127.0 was used here
-# (the release where content_scripts host permissions began being granted at
-# install time rather than being purely opt-in); 140 supersedes it and keeps
-# that behaviour, since 140 > 127.
-$GeckoId                = 'acumatica-trace-copier@alconroy'
-$GeckoMinVersion        = '140.0'
-$GeckoAndroidMinVersion = '142.0'
+# The version floor is set by data_collection_permissions below, which landed in
+# Firefox 140. Declaring a lower floor makes AMO warn that the extension claims
+# support for releases that would silently ignore the data consent declaration.
+# An earlier floor of 127.0 was used here (the release where content_scripts
+# host permissions began being granted at install time rather than being purely
+# opt-in); 140 supersedes it and keeps that behaviour, since 140 > 127.
+#
+# Do NOT raise this to 142 to match Android's data_collection_permissions
+# support. Firefox ESR 140 is a supported release and plausibly a meaningful
+# share of the audience for an ERP developer tool; a 142 floor would lock those
+# users out to silence a warning about a platform this extension does not
+# target.
+#
+# There is deliberately no gecko_android key. Its ABSENCE is what marks an
+# add-on desktop-only on AMO -- including it, even empty, is what claims Android
+# compatibility. This extension is not usable on Firefox for Android: the
+# floating button over a trace grid is a desktop-shaped UX and it has never been
+# tested there. AMO may still emit a non-blocking Android version warning at
+# submission; that warning concerns a platform we do not support and is
+# correctly ignored.
+$GeckoId         = 'acumatica-trace-copier@alconroy'
+$GeckoMinVersion = '140.0'
 
 # AMO requires every new extension to declare what personal data it collects or
 # transmits (mandatory for new submissions from 2025-11-03). This extension
@@ -132,9 +144,6 @@ function New-FirefoxManifest {
       "data_collection_permissions": {
         "required": ["$GeckoDataCollection"]
       }
-    },
-    "gecko_android": {
-      "strict_min_version": "$GeckoAndroidMinVersion"
     }
   },
 "@

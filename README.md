@@ -43,7 +43,9 @@ Every `.js`, `.css` and `.html` file is identical in both builds. The only diffe
 
 > **Load `dist\firefox\` in Firefox, not the repo root.** The root manifest has no add-on ID, and Firefox keys `storage.sync` on that ID — the extension will load and appear to work, but your saved AI prompt will silently fail to persist.
 
-The Firefox build also carries a `data_collection_permissions` declaration of `none`, which addons.mozilla.org requires, and version floors of Firefox 140 / Firefox for Android 142 — the releases that introduced support for that key.
+The Firefox build also carries a `data_collection_permissions` declaration of `none`, which addons.mozilla.org requires, and a floor of Firefox 140 — the release that introduced support for that key.
+
+Desktop Firefox only. There is deliberately no `gecko_android` key, the absence of which is what marks an add-on desktop-only on AMO: the floating button over a trace grid is a desktop-shaped UX and it has never been tested on Firefox for Android.
 
 ## Use
 
