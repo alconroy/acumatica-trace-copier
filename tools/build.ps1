@@ -122,6 +122,37 @@ function New-FirefoxManifest {
     return $SourceText.Substring(0, $brace + 1) + "`n" + $block + $SourceText.Substring($brace + 1)
 }
 
+function Assert-ZipEntryNames {
+    <#
+        Guards the separator bug described in Build-Package. ZipArchiveEntry
+        returns FullName exactly as stored, so a backslash here means the
+        archive would be rejected on upload. Fail the build rather than hand
+        over a package that only fails later at the store.
+
+        Do NOT verify this with Python's zipfile module: on Windows,
+        ZipInfo.__init__ rewrites os.sep to "/", so namelist() reports clean
+        names for an archive that is actually malformed. Check the raw bytes,
+        or use this assertion.
+    #>
+    param([Parameter(Mandatory)][string]$ZipPath)
+
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        $bad = @($archive.Entries | Where-Object { $_.FullName.Contains('\') })
+        if ($bad.Count -gt 0) {
+            throw ("Archive has backslash entry names, which stores reject: {0}" -f (($bad | ForEach-Object { $_.FullName }) -join ', '))
+        }
+
+        $names = @($archive.Entries | ForEach-Object { $_.FullName })
+        if ($names -notcontains 'manifest.json') {
+            throw "manifest.json is not at the root of $ZipPath"
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
 function Build-Package {
     param(
         [Parameter(Mandatory)][string]$Target,
@@ -162,17 +193,39 @@ function Build-Package {
     }
 
     # Both stores require manifest.json at the root of the archive.
-    # CreateFromDirectory places the folder's *contents* at the zip root.
+    #
+    # Entries are added by hand rather than with ZipFile::CreateFromDirectory,
+    # which on .NET Framework (Windows PowerShell 5.1) writes entry names using
+    # the platform separator -- producing "icons\icon128.png". The ZIP spec
+    # requires forward slashes, and AMO rejects such an archive outright with
+    # "Invalid file name in archive: icons\icon128.png". Building the names
+    # explicitly is the only way to guarantee the separator on 5.1.
     $zipPath = Join-Path $DistRoot "acumatica-trace-copier-$Target-v$Version.zip"
     if (Test-Path $zipPath) {
         Remove-Item $zipPath -Force
     }
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $stageDir,
+
+    $stageFull = (Get-Item $stageDir).FullName
+    $archive = [System.IO.Compression.ZipFile]::Open(
         $zipPath,
-        [System.IO.Compression.CompressionLevel]::Optimal,
-        $false
+        [System.IO.Compression.ZipArchiveMode]::Create
     )
+    try {
+        foreach ($item in (Get-ChildItem $stageFull -Recurse -File | Sort-Object FullName)) {
+            $entryName = $item.FullName.Substring($stageFull.Length + 1).Replace('\', '/')
+            $null = [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $archive,
+                $item.FullName,
+                $entryName,
+                [System.IO.Compression.CompressionLevel]::Optimal
+            )
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+
+    Assert-ZipEntryNames -ZipPath $zipPath
 
     $sizeKb = [math]::Round((Get-Item $zipPath).Length / 1KB, 1)
     Write-Host ("  {0,-8} packed  {1}  ({2} KB)" -f $Target, $zipPath, $sizeKb)
@@ -180,6 +233,9 @@ function Build-Package {
 
 # ------------------------------------------------------------------- build --
 
+# ZipFile/ZipFileExtensions live in .FileSystem; ZipArchiveMode lives in the
+# base System.IO.Compression assembly. Both are needed.
+Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 if (-not (Test-Path $SourceManifest)) {
