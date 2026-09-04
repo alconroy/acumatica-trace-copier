@@ -51,11 +51,18 @@ $ErrorActionPreference = 'Stop'
 
 # Firefox add-on identity. The id must stay stable for the life of the add-on:
 # changing it makes AMO treat the result as a different extension and orphans
-# every user's synced storage. 127.0 is the floor because that is the release
-# where Firefox began granting content_scripts host permissions at install time
-# rather than leaving them entirely opt-in.
-$GeckoId         = 'acumatica-trace-copier@alconroy'
-$GeckoMinVersion = '127.0'
+# every user's synced storage.
+#
+# The version floors are set by data_collection_permissions below, which landed
+# in Firefox 140 on desktop and 142 on Android. Declaring a lower floor makes
+# AMO warn that the extension claims support for releases that would silently
+# ignore the data consent declaration. An earlier floor of 127.0 was used here
+# (the release where content_scripts host permissions began being granted at
+# install time rather than being purely opt-in); 140 supersedes it and keeps
+# that behaviour, since 140 > 127.
+$GeckoId                = 'acumatica-trace-copier@alconroy'
+$GeckoMinVersion        = '140.0'
+$GeckoAndroidMinVersion = '142.0'
 
 # AMO requires every new extension to declare what personal data it collects or
 # transmits (mandatory for new submissions from 2025-11-03). This extension
@@ -125,6 +132,9 @@ function New-FirefoxManifest {
       "data_collection_permissions": {
         "required": ["$GeckoDataCollection"]
       }
+    },
+    "gecko_android": {
+      "strict_min_version": "$GeckoAndroidMinVersion"
     }
   },
 "@
