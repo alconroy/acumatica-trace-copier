@@ -15,7 +15,23 @@ Unofficial project — not affiliated with, endorsed by, or sponsored by Acumati
 3. Enable **Developer mode** (top right)
 4. Click **Load unpacked** and select the repo folder
 
-**Packaged zip:** grab the latest `acumatica-trace-copier-vX.Y.Z.zip` from [Releases](../../releases), unzip it, then follow the same "Load unpacked" steps pointing at the unzipped folder.
+**Packaged zip:** grab the latest `acumatica-trace-copier-chrome-vX.Y.Z.zip` from [Releases](../../releases), unzip it, then follow the same "Load unpacked" steps pointing at the unzipped folder.
+
+## Building
+
+You don't need a build to run this in Chrome — the repo root is the source of truth and is Chrome-shaped, so **Load unpacked** on the repo folder works as-is. The build is for producing release zips, and for Firefox.
+
+```powershell
+.\tools\build.ps1
+```
+
+That stages `dist\chrome\` and `dist\firefox\` and zips each. Use `-Browser chrome|firefox|all` to build a single target, and `-NoZip` to stage the folders without zipping while iterating.
+
+Every `.js`, `.css` and `.html` file is identical in both builds. The only difference is the manifest: Firefox requires a `browser_specific_settings.gecko` block, which Chrome reports as an unrecognized key. The script injects it into the Firefox build only, so there is one manifest to maintain and the two builds cannot drift. Don't add that key to the root manifest by hand — the build script refuses to run if it finds one.
+
+> **Firefox support is not released yet** — it builds, but it hasn't been submitted to addons.mozilla.org. To try it, run the build and load `dist\firefox\` via `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
+>
+> Load `dist\firefox\`, **not the repo root**. The root manifest has no add-on ID, and Firefox keys `storage.sync` on that ID — the extension will load and appear to work, but your saved AI prompt will silently fail to persist.
 
 ## Use
 

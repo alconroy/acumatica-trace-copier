@@ -3,7 +3,7 @@
   "name": "Acumatica Trace Copier",
   "version": "1.2.1",
   "description": "Copy Acumatica trace exceptions to the clipboard as clean text for debugging with Claude or any AI assistant.",
-  "permissions": ["activeTab", "scripting", "clipboardWrite", "storage"],
+  "permissions": ["activeTab", "clipboardWrite", "storage"],
   "options_ui": {
     "page": "options.html",
     "open_in_tab": false
