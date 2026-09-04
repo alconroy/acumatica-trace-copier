@@ -22,10 +22,12 @@ Unofficial project — not affiliated with, endorsed by, or sponsored by Acumati
 You don't need a build to run this in Chrome — the repo root is the source of truth and is Chrome-shaped, so **Load unpacked** on the repo folder works as-is. The build is for producing release zips, and for Firefox.
 
 ```powershell
-.\tools\build.ps1
+powershell -ExecutionPolicy Bypass -File .\tools\build.ps1
 ```
 
 That stages `dist\chrome\` and `dist\firefox\` and zips each. Use `-Browser chrome|firefox|all` to build a single target, and `-NoZip` to stage the folders without zipping while iterating.
+
+The `-ExecutionPolicy Bypass` is per-invocation and changes nothing on your machine. Windows blocks unsigned scripts under the default `Restricted` policy, and a script cloned or downloaded from GitHub carries a mark-of-the-web that `RemoteSigned` blocks too — so this form is the one that works everywhere without you having to loosen a machine-wide security setting.
 
 Every `.js`, `.css` and `.html` file is identical in both builds. The only difference is the manifest: Firefox requires a `browser_specific_settings.gecko` block, which Chrome reports as an unrecognized key. The script injects it into the Firefox build only, so there is one manifest to maintain and the two builds cannot drift. Don't add that key to the root manifest by hand — the build script refuses to run if it finds one.
 
