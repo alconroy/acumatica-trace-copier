@@ -57,6 +57,18 @@ $ErrorActionPreference = 'Stop'
 $GeckoId         = 'acumatica-trace-copier@alconroy'
 $GeckoMinVersion = '127.0'
 
+# AMO requires every new extension to declare what personal data it collects or
+# transmits (mandatory for new submissions from 2025-11-03). This extension
+# collects and transmits nothing: there is no fetch, no XHR and no network call
+# anywhere in the codebase, copied text goes only to the user's own clipboard,
+# and the saved AI prompt is browser-native storage.sync of the user's own
+# setting -- none of it leaves the device. "none" is the value Mozilla defines
+# for that case and it is mutually exclusive with every other value.
+#
+# This is a disclosure you are attesting to. Revisit it the moment the extension
+# gains any network call, telemetry, or off-device storage.
+$GeckoDataCollection = 'none'
+
 # Everything that ships. Listed explicitly rather than globbing the repo so the
 # working files (inspection.txt, MARKETING_BRIEF.md, store-assets\, ...) can
 # never leak into a published package.
@@ -109,7 +121,10 @@ function New-FirefoxManifest {
   "browser_specific_settings": {
     "gecko": {
       "id": "$GeckoId",
-      "strict_min_version": "$GeckoMinVersion"
+      "strict_min_version": "$GeckoMinVersion",
+      "data_collection_permissions": {
+        "required": ["$GeckoDataCollection"]
+      }
     }
   },
 "@
