@@ -1,10 +1,12 @@
 # Acumatica Trace Copier
 
-Chrome extension that captures Acumatica trace exceptions (or any panel) and copies clean text to the clipboard for pasting into Claude or any AI assistant for debugging.
+Browser extension that captures Acumatica trace exceptions (or any panel) and copies clean text to the clipboard for pasting into Claude or any AI assistant for debugging.
 
 Unofficial project — not affiliated with, endorsed by, or sponsored by Acumatica, Inc.
 
 ## Install
+
+### Chrome
 
 [Check here to download from Chrome Web Store](https://tinyurl.com/AcumaticaTraceCopier)
 
@@ -16,6 +18,14 @@ Unofficial project — not affiliated with, endorsed by, or sponsored by Acumati
 4. Click **Load unpacked** and select the repo folder
 
 **Packaged zip:** grab the latest `acumatica-trace-copier-chrome-vX.Y.Z.zip` from [Releases](../../releases), unzip it, then follow the same "Load unpacked" steps pointing at the unzipped folder.
+
+### Firefox
+
+Submitted to addons.mozilla.org and awaiting review — a listing link will be added here once it's approved.
+
+Until then, install from source: run the [build](#building), then open `about:debugging` → **This Firefox** → **Load Temporary Add-on** and select `dist\firefox\manifest.json`. Note that a temporary add-on is removed when Firefox restarts.
+
+Load `dist\firefox\`, **not the repo root** — see the note under [Building](#building) for why.
 
 ## Building
 
@@ -31,9 +41,9 @@ The `-ExecutionPolicy Bypass` is per-invocation and changes nothing on your mach
 
 Every `.js`, `.css` and `.html` file is identical in both builds. The only difference is the manifest: Firefox requires a `browser_specific_settings.gecko` block, which Chrome reports as an unrecognized key. The script injects it into the Firefox build only, so there is one manifest to maintain and the two builds cannot drift. Don't add that key to the root manifest by hand — the build script refuses to run if it finds one.
 
-> **Firefox support is not released yet** — it builds, but it hasn't been submitted to addons.mozilla.org. To try it, run the build and load `dist\firefox\` via `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
->
-> Load `dist\firefox\`, **not the repo root**. The root manifest has no add-on ID, and Firefox keys `storage.sync` on that ID — the extension will load and appear to work, but your saved AI prompt will silently fail to persist.
+> **Load `dist\firefox\` in Firefox, not the repo root.** The root manifest has no add-on ID, and Firefox keys `storage.sync` on that ID — the extension will load and appear to work, but your saved AI prompt will silently fail to persist.
+
+The Firefox build also carries a `data_collection_permissions` declaration of `none`, which addons.mozilla.org requires, and version floors of Firefox 140 / Firefox for Android 142 — the releases that introduced support for that key.
 
 ## Use
 
@@ -63,7 +73,7 @@ Open **⚙️ AI prompt settings** from the popup (or the extension's options pa
 | `{count}` | Number of exceptions captured |
 | `{url}` | The page URL |
 
-The prompt is saved via `chrome.storage.sync`, so it follows you across Chrome profiles on the same account.
+The prompt is saved via `storage.sync`, so it follows you across profiles signed into the same account — a Google account in Chrome, a Firefox Account in Firefox.
 
 ## How detection works
 
