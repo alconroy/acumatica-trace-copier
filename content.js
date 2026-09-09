@@ -4,6 +4,11 @@
 
   const SIGNATURE_RE = /Exception Type:|Last Requests|Stack Trace:/;
 
+  // Upper bound on how many grid rows a single scan will select in turn. Each
+  // selection is a server round-trip, so an unbounded scan on a long-running
+  // trace would hammer the instance.
+  const MAX_ROWS_TO_SCAN = 40;
+
   // ---------- clipboard ----------
   function copyToClipboard(text) {
     return navigator.clipboard.writeText(text).catch(() => {
@@ -87,8 +92,9 @@
   // ---------- trace grid context (screen / request type / command) ----------
   // The trace screen's request grid renders rows as <tr class="data-line">
   // with per-field cell classes (col-screenId, col-requestType, col-command…).
-  // Rows whose request errored carry the "error" class; the row driving the
-  // messages panel below carries selected="true".
+  // The row driving the messages panel below carries selected="true". Rows may
+  // additionally carry an "error" class — see rowLooksErrored for why that is
+  // only ever a hint.
   function readRowContext(tr) {
     const cell = cls => {
       const td = tr.querySelector('td.col-' + cls);
@@ -114,15 +120,15 @@
   }
 
   function getTraceContext() {
-    const rows = Array.from(document.querySelectorAll('tr.data-line'));
-    const errorRows = rows.filter(r => r.classList.contains('error'));
+    const rows = getRequestRows();
+    const errorRows = rows.filter(rowLooksErrored);
     const selected = rows.find(r => r.getAttribute('selected') === 'true');
 
     // Prefer the selected row when it errored — its exceptions are the ones
     // shown in the panel. Otherwise fall back to the first error row, then to
     // whatever row is selected.
     let primaryRow = null;
-    if (selected && selected.classList.contains('error')) primaryRow = selected;
+    if (selected && rowLooksErrored(selected)) primaryRow = selected;
     else if (errorRows.length > 0) primaryRow = errorRows[0];
     else if (selected) primaryRow = selected;
 
@@ -163,10 +169,31 @@
   // Each exception is a <message-item> custom element containing a
   // ".label-exception" marker span. This is precise and doesn't depend on
   // guessing CSS classes for the surrounding layout.
+  function dedupeBy(items, keyOf) {
+    const seen = new Set();
+    const out = [];
+    for (const item of items) {
+      const key = keyOf(item);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+    return out;
+  }
+
+  // All four trace tabs stay in the DOM at once — the inactive ones are only
+  // hidden with display:none — and the ALL panel repeats every item the
+  // EXCEPTIONS panel shows. Scanning the whole document therefore returns each
+  // exception twice, so narrow to the dedicated exceptions panel when it exists
+  // and fall back to de-duplicating by extracted text when it doesn't.
   function findExceptionMessageItems(root) {
-    return Array.from(root.querySelectorAll('message-item')).filter(mi =>
-      mi.querySelector('.label-exception')
+    const exceptionsPanel = Array.from(root.querySelectorAll('messages-panel')).find(
+      p => (p.getAttribute('data.bind') || '').trim() === 'exceptions'
     );
+    const items = Array.from(
+      (exceptionsPanel || root).querySelectorAll('message-item')
+    ).filter(mi => mi.querySelector('.label-exception'));
+    return exceptionsPanel ? items : dedupeBy(items, extractExceptionCard);
   }
 
   // Field rows look like: <td class="caption">...icon/tooltip...Exception Type:</td><td><pre>value</pre></td>
@@ -232,16 +259,40 @@
     }
 
     const arr = Array.from(cards);
-    return arr.filter(c => !arr.some(other => other !== c && other.contains(c)));
+    const outermost = arr.filter(c => !arr.some(other => other !== c && other.contains(c)));
+    // Same duplication as the message-item path: hidden tab panels repeat the
+    // visible one's content.
+    return dedupeBy(outermost, c => cleanText(c.innerText || ''));
   }
 
-  // ---------- auto-selecting errored grid rows ----------
+  // ---------- auto-selecting grid rows ----------
   // Acumatica only renders the details panel (and its exception blocks) for
-  // the grid row that is currently selected. If nothing is rendered but the
-  // grid has rows flagged with errors, select each of those rows in turn and
-  // wait for the panel to load before extracting.
-  function getErrorRowElements() {
-    return Array.from(document.querySelectorAll('tr.data-line.error'));
+  // the grid row that is currently selected. If nothing is rendered, select
+  // each request row in turn and wait for the panel to load before extracting.
+
+  // Two grids on this screen share the "data-line" row class: the requests grid
+  // (rows id="grid_trace_N", cells col-screenId/col-command/…) and the SQL grid
+  // (id="grid_sql_…", cells col-tableList/col-time/…). Only the requests grid
+  // drives the messages panel, so every row query has to be narrowed to it.
+  function getRequestRows() {
+    const rows = Array.from(document.querySelectorAll('tr.data-line'));
+    const byId = rows.filter(tr => (tr.id || '').indexOf('grid_trace') === 0);
+    if (byId.length > 0) return byId;
+    return rows.filter(tr => tr.querySelector('td.col-screenId'));
+  }
+
+  // Acumatica marks a failed request with an "error" class on the row and a
+  // count in its col-issues cell. Neither is dependable: first-chance
+  // exceptions recorded by the profiler (PXFirstChanceExceptionLogger) are
+  // attached to a request without failing it, and the issues column is not
+  // displayed on every build. So this is a hint used to scan the likely rows
+  // first — never a precondition for scanning at all.
+  function rowLooksErrored(tr) {
+    if (tr.classList.contains('error')) return true;
+    if (tr.querySelector('td.col-issues.errors')) return true;
+    if (tr.querySelector('qp-icon[imagesrc*="error"], use[href*="error"]')) return true;
+    const issues = tr.querySelector('td.col-issues');
+    return !!issues && /[1-9]/.test(issues.textContent || '');
   }
 
   async function waitFor(test, timeout, interval = 120) {
@@ -253,18 +304,38 @@
     return test();
   }
 
-  function renderedExceptionsSnapshot() {
-    return findExceptionMessageItems(document.body).map(extractExceptionCard).join('\n\n');
+  // Fingerprint of every trace tab panel (ALL / MESSAGES / EXCEPTIONS / SQL).
+  // Selecting a row reloads all four, and the SQL panel differs between
+  // requests even when neither has exceptions, so this changes on virtually
+  // every row load — which lets the settle wait below exit in a few hundred ms
+  // instead of always burning its full timeout. That matters now that every
+  // request gets visited.
+  //
+  // Deliberately scoped to the panels: fingerprinting the whole page would pick
+  // up the trace screen's ticking Local/UTC clock in the footer and report a
+  // change on every poll while the panel still showed the previous row.
+  function panelsSnapshot() {
+    const parts = [];
+    document.querySelectorAll('messages-panel').forEach(p => parts.push(p.textContent.length));
+    // The SQL tab is a master-grid rather than a messages-panel, and it is the
+    // part that reliably differs between requests: plenty of requests have no
+    // messages and no exceptions, but every one of them runs SQL. Without it
+    // the fingerprint would be identical for every quiet request and each one
+    // would burn the full settle timeout.
+    document
+      .querySelectorAll('master-grid[name="sql"]')
+      .forEach(g => parts.push(g.textContent.length));
+    return parts.join(',');
   }
 
   function synthClick(el) {
     el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   }
 
-  function clickElementWithText(text) {
+  function clickElementMatching(re) {
     const candidates = Array.from(
       document.body.querySelectorAll('a, button, span, div, li')
-    ).filter(el => (el.textContent || '').trim() === text);
+    ).filter(el => re.test((el.textContent || '').replace(/\s+/g, ' ').trim()));
     if (candidates.length === 0) return false;
     // querySelectorAll is document order, so nested wrappers sharing the same
     // trimmed text put the innermost element last — click that one.
@@ -272,20 +343,23 @@
     return true;
   }
 
-  async function selectErrorRowAndWait(tr) {
-    const before = renderedExceptionsSnapshot();
+  async function selectRowAndCollect(tr) {
     if (tr.getAttribute('selected') !== 'true') {
+      const before = panelsSnapshot();
       synthClick(tr);
-      // Aurelia may reuse DOM nodes on re-render, so compare extracted text
-      // rather than node identity to detect the panel updating.
-      await waitFor(() => {
-        const now = renderedExceptionsSnapshot();
-        return now !== '' && (before === '' || now !== before);
-      }, 2500);
+      // The row's selected attribute flips as soon as the click registers; the
+      // panel content follows once that request's details load.
+      await waitFor(() => tr.getAttribute('selected') === 'true', 1500);
+      // Bounded settle wait, not a requirement: two consecutive requests can
+      // genuinely render identical panels, in which case this times out and we
+      // read what is there, which is correct anyway.
+      await waitFor(() => panelsSnapshot() !== before, 1500);
     }
     if (findExceptionMessageItems(document.body).length === 0) {
-      // The active tab may not show exceptions — try the EXCEPTIONS tab.
-      if (clickElementWithText('EXCEPTIONS')) {
+      // Builds that render only the active tab need the EXCEPTIONS tab opened.
+      // Its label carries a count when non-zero ("EXCEPTIONS 2"), so an exact
+      // text match would miss it in exactly the case that matters.
+      if (clickElementMatching(/^EXCEPTIONS(\s+\d+)?$/i)) {
         await waitFor(() => findExceptionMessageItems(document.body).length > 0, 1500);
       }
     }
@@ -297,53 +371,92 @@
   async function copyAllExceptions(includeAiPrompt) {
     await expandAll(document.body);
 
-    let items = findExceptionMessageItems(document.body);
-    let useGenericExtraction = false;
-
-    if (items.length === 0) {
-      items = findExceptionCardsGeneric(document.body);
-      useGenericExtraction = true;
-    }
-
     let bodies;
-    let sections = null; // per-request grouping when we auto-selected rows
+    let sections = null;   // per-request grouping when we swept the grid
+    let scannedCount = 0;  // how many rows that sweep actually visited
+    let headerNote = '';   // note emitted when the sweep hit MAX_ROWS_TO_SCAN
 
-    if (items.length > 0) {
+    const rows = getRequestRows();
+
+    if (rows.length === 0) {
+      // No request grid — a single-request trace screen, or unknown markup.
+      // Take whatever is rendered.
+      let items = findExceptionMessageItems(document.body);
+      let useGenericExtraction = false;
+      if (items.length === 0) {
+        items = findExceptionCardsGeneric(document.body);
+        useGenericExtraction = true;
+      }
+      if (items.length === 0) {
+        showToast('No exceptions found on this page. Try "Pick element" instead.');
+        return;
+      }
       bodies = items.map(c =>
         useGenericExtraction ? cleanText(c.innerText || '') : extractExceptionCard(c)
       );
     } else {
-      // Nothing rendered — the details panel only shows the selected row's
-      // messages. If the grid flags errored requests, select them ourselves.
-      const errorRows = getErrorRowElements();
-      if (errorRows.length === 0) {
-        showToast('No exceptions found on this page. Try "Pick element" instead.');
-        return;
-      }
-      showToast(`Loading exceptions from ${errorRows.length} errored request(s)…`);
+      // The details panel only ever shows the selected row's messages, so the
+      // only way to see the whole trace is to visit every request in turn —
+      // including when something is already on screen, since that is just the
+      // one row the user happens to have selected.
+      //
+      // Row flags are no help in deciding what to skip: an exception logged
+      // against a request Acumatica did not treat as failed leaves no flag, and
+      // some builds hide the issues column entirely. They are used only to
+      // decide which rows make the cut on a grid longer than the cap.
+      const toScan =
+        rows.length <= MAX_ROWS_TO_SCAN
+          ? rows
+          : [...rows.filter(rowLooksErrored), ...rows.filter(r => !rowLooksErrored(r))]
+              .slice(0, MAX_ROWS_TO_SCAN);
+      const previouslySelected = rows.find(r => r.getAttribute('selected') === 'true');
+
       sections = [];
-      for (const tr of errorRows) {
-        const rowBodies = await selectErrorRowAndWait(tr);
-        sections.push({ ctx: readRowContext(tr), bodies: rowBodies });
+      const seenBodies = new Set();
+      for (let i = 0; i < toScan.length; i++) {
+        showToast(`Scanning request ${i + 1} of ${toScan.length} for exceptions…`, 4000);
+        // A row whose details load slowly can leave the previous row's panel on
+        // screen; dropping bodies already collected from an earlier row keeps
+        // that from being reported against the wrong request.
+        const rowBodies = (await selectRowAndCollect(toScan[i])).filter(b => {
+          if (seenBodies.has(b)) return false;
+          seenBodies.add(b);
+          return true;
+        });
+        if (rowBodies.length > 0) {
+          sections.push({ ctx: readRowContext(toScan[i]), bodies: rowBodies });
+        }
       }
+      scannedCount = toScan.length;
+
+      // Put the grid back on whatever the user was looking at.
+      if (previouslySelected && previouslySelected.getAttribute('selected') !== 'true') {
+        synthClick(previouslySelected);
+      }
+
       bodies = sections.flatMap(s => s.bodies);
       if (bodies.length === 0) {
-        const hint = formatRowContext(sections[0].ctx);
         showToast(
-          `Couldn't load the exception details automatically — click the errored row in the grid (${hint || 'red error icon'}), then copy again.`,
+          `No exceptions found in ${scannedCount} request(s) on this page. Try "Pick element" instead.`,
           6000
         );
         return;
+      }
+      if (rows.length > toScan.length) {
+        headerNote = `Grid has ${rows.length} requests; scanned the first ${toScan.length} (errored rows first).`;
       }
     }
 
     const count = bodies.length;
     const context = getTraceContext();
-    const primaryCtx = sections
-      ? (sections.find(s => s.bodies.length > 0) || sections[0]).ctx
-      : context.primary;
+    const primaryCtx = sections ? sections[0].ctx : context.primary;
 
     const headerLines = [`Acumatica Trace — ${count} exception(s)`];
+    if (sections) {
+      headerLines.push(
+        `Scanned ${scannedCount} request(s); ${sections.length} had exceptions`
+      );
+    }
     if (!sections && primaryCtx) {
       const line = formatRowContext(primaryCtx);
       if (line) headerLines.push(line);
@@ -357,15 +470,14 @@
       });
     }
 
+    if (headerNote) headerLines.push(headerNote);
+
     let bodyText;
     if (sections) {
       let n = 0;
       bodyText = sections
         .map(s => {
-          const head = `=== Errored request — ${formatRowContext(s.ctx) || '(unknown request)'} ===`;
-          if (s.bodies.length === 0) {
-            return `${head}\n(couldn't load this request's exceptions automatically — select its row in the grid to view them)`;
-          }
+          const head = `=== Request — ${formatRowContext(s.ctx) || '(unknown request)'} ===`;
           const ex = s.bodies.map(b => `--- Exception ${++n} of ${count} ---\n${b}`);
           return `${head}\n${ex.join('\n\n')}`;
         })
