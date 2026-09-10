@@ -1,12 +1,12 @@
 ## Privacy Policy — Acumatica Trace Copier
 
-Last updated: 2026-07-10
+Last updated: 2026-09-10
 
 This extension does not collect, transmit, or share any user data, browsing history, or page content with any server, developer, or third party.
 
 - All processing happens locally in your browser.
 - The only action the extension takes is reading text from the current page (when you click "Copy Exceptions", "Copy for AI", or use "Pick element") and writing that text to your local clipboard.
-- The only thing stored is your own AI prompt template — a setting you type yourself on the options page — kept in Chrome's extension storage (`chrome.storage.sync`, synced by Chrome across your own signed-in profiles). No page content or activity is ever stored.
+- The only thing stored is your own AI prompt template — a setting you type yourself on the options page — kept in the browser's own extension storage (`chrome.storage.sync`, synced by your browser across your own signed-in profiles: a Google account in Chrome, a Microsoft account in Microsoft Edge, a Firefox Account in Firefox). No page content or activity is ever stored.
 - Nothing is sent over the network. The extension makes no network requests of its own.
 - No analytics, tracking, or telemetry of any kind is included.
 

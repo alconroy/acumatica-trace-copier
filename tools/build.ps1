@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-    Builds distributable Chrome and Firefox packages for Acumatica Trace Copier.
+    Builds distributable Chrome, Edge and Firefox packages for Acumatica Trace
+    Copier.
 
 .DESCRIPTION
-    All extension source is shared between the two browsers -- every .js, .css
-    and .html file is byte-identical in both builds. The only difference is the
-    manifest:
+    All extension source is shared between the three browsers -- every .js,
+    .css and .html file is byte-identical in all three builds. The only
+    difference is the manifest:
 
       * Firefox requires a browser_specific_settings.gecko block. It is needed
         to publish on addons.mozilla.org, and separately it is what makes
@@ -13,15 +14,22 @@
         so without it the options page silently fails to persist.
       * Chrome does not understand that key and reports it as an unrecognized
         manifest key on chrome://extensions.
+      * Edge is Chromium, and per Microsoft's porting guide the Chrome
+        extension APIs and manifest keys are code-compatible with it. Every API
+        this extension touches (storage, runtime, tabs, action) is on Edge's
+        supported list, so the Edge manifest is the Chrome manifest verbatim --
+        the two packages are byte-identical and are separate targets only so
+        each store gets its own clearly named artifact.
 
     So manifest.json in the repo root is the single source of truth and is
     Chrome-shaped: it can still be loaded directly via "Load unpacked" with no
-    warnings. This script copies it verbatim for the Chrome build and injects
-    the gecko block for the Firefox build. Version, permissions and everything
-    else come from the one file, so the two builds cannot drift.
+    warnings, in Chrome or in Edge. This script copies it verbatim for the
+    Chrome and Edge builds and injects the gecko block for the Firefox build.
+    Version, permissions and everything else come from the one file, so the
+    three builds cannot drift.
 
 .PARAMETER Browser
-    Which package(s) to build: chrome, firefox, or all (default).
+    Which package(s) to build: chrome, edge, firefox, or all (default).
 
 .PARAMETER NoZip
     Stage the unpacked folders but skip creating the .zip files. Useful while
@@ -29,7 +37,7 @@
 
 .EXAMPLE
     .\tools\build.ps1
-    Builds dist\chrome\ and dist\firefox\ plus a zip for each.
+    Builds dist\chrome\, dist\edge\ and dist\firefox\ plus a zip for each.
 
 .EXAMPLE
     .\tools\build.ps1 -Browser firefox -NoZip
@@ -38,7 +46,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('chrome', 'firefox', 'all')]
+    [ValidateSet('chrome', 'edge', 'firefox', 'all')]
     [string]$Browser = 'all',
 
     [switch]$NoZip
@@ -187,6 +195,42 @@ function Assert-ZipEntryNames {
     }
 }
 
+function Assert-EdgePublishable {
+    <#
+        Two things block Microsoft Edge certification that neither the Chrome
+        Web Store nor AMO objects to, both straight out of Microsoft's porting
+        guide:
+
+          * update_url must not be present. It points a sideloaded install at
+            the Chrome Web Store update feed, and Partner Center rejects a
+            package that carries it.
+          * The word "Chrome" must not appear in the extension name or
+            description. Edge certification requires the extension to be
+            rebranded, and Partner Center pulls both fields verbatim out of the
+            manifest into the store listing, where they are read-only.
+
+        Neither applies to the manifest as it stands, so this is a guard
+        against a future edit rather than a fix. A future edit is exactly the
+        case where nobody would think to re-read the Edge docs, and the cost of
+        missing it is a failed certification a week after submission.
+    #>
+    param([Parameter(Mandatory)]$Manifest)
+
+    if ($Manifest.PSObject.Properties.Name -contains 'update_url') {
+        throw 'manifest.json contains update_url. Microsoft Edge requires it removed before submission, and it has no business in a store-submitted package for any target.'
+    }
+
+    foreach ($field in 'name', 'description') {
+        if ($Manifest.PSObject.Properties.Name -notcontains $field) {
+            continue
+        }
+        $value = [string]$Manifest.$field
+        if ($value -match '(?i)chrome') {
+            throw ("manifest.json {0} contains the word Chrome: {1}. Microsoft Edge certification requires the extension to be rebranded; Partner Center takes the name and description verbatim from the manifest into the store listing." -f $field, $value)
+        }
+    }
+}
+
 function Build-Package {
     param(
         [Parameter(Mandatory)][string]$Target,
@@ -301,6 +345,12 @@ Write-Host ""
 
 if ($Browser -eq 'chrome' -or $Browser -eq 'all') {
     Build-Package -Target 'chrome' -ManifestText $chromeManifest -Version $version
+}
+if ($Browser -eq 'edge' -or $Browser -eq 'all') {
+    # Only gates the Edge target: a "Chrome" in the name is a certification
+    # failure at Partner Center but is nobody else's business.
+    Assert-EdgePublishable -Manifest $parsed
+    Build-Package -Target 'edge' -ManifestText $chromeManifest -Version $version
 }
 if ($Browser -eq 'firefox' -or $Browser -eq 'all') {
     Build-Package -Target 'firefox' -ManifestText $firefoxManifest -Version $version

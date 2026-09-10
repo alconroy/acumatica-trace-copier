@@ -19,6 +19,21 @@ Unofficial project — not affiliated with, endorsed by, or sponsored by Acumati
 
 **Packaged zip:** grab the latest `acumatica-trace-copier-chrome-vX.Y.Z.zip` from [Releases](../../releases), unzip it, then follow the same "Load unpacked" steps pointing at the unzipped folder.
 
+### Microsoft Edge
+
+Not yet listed on the Microsoft Edge Add-ons store — a link will be added here once it's submitted and clears certification.
+
+**From source (developer mode):**
+
+1. Clone or download this repo.
+2. Open `edge://extensions`
+3. Enable **Developer mode** (left-hand panel)
+4. Click **Load unpacked** and select the repo folder
+
+**Packaged zip:** grab the latest `acumatica-trace-copier-edge-vX.Y.Z.zip` from [Releases](../../releases), unzip it, then follow the same "Load unpacked" steps.
+
+Edge is Chromium, and every extension API this uses (`storage`, `runtime`, `tabs`, `action`) is on [Edge's supported API list](https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/api-support), so the Edge package is byte-identical to the Chrome one. It ships as its own artifact purely so each store submission has an unambiguous file — the repo root loads directly in Edge too.
+
 ### Firefox
 
 Submitted to addons.mozilla.org and awaiting review — a listing link will be added here once it's approved.
@@ -29,17 +44,19 @@ Load `dist\firefox\`, **not the repo root** — see the note under [Building](#b
 
 ## Building
 
-You don't need a build to run this in Chrome — the repo root is the source of truth and is Chrome-shaped, so **Load unpacked** on the repo folder works as-is. The build is for producing release zips, and for Firefox.
+You don't need a build to run this in Chrome or Edge — the repo root is the source of truth and is Chrome-shaped, so **Load unpacked** on the repo folder works as-is in both. The build is for producing release zips, and for Firefox.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\build.ps1
 ```
 
-That stages `dist\chrome\` and `dist\firefox\` and zips each. Use `-Browser chrome|firefox|all` to build a single target, and `-NoZip` to stage the folders without zipping while iterating.
+That stages `dist\chrome\`, `dist\edge\` and `dist\firefox\` and zips each. Use `-Browser chrome|edge|firefox|all` to build a single target, and `-NoZip` to stage the folders without zipping while iterating.
 
 The `-ExecutionPolicy Bypass` is per-invocation and changes nothing on your machine. Windows blocks unsigned scripts under the default `Restricted` policy, and a script cloned or downloaded from GitHub carries a mark-of-the-web that `RemoteSigned` blocks too — so this form is the one that works everywhere without you having to loosen a machine-wide security setting.
 
-Every `.js`, `.css` and `.html` file is identical in both builds. The only difference is the manifest: Firefox requires a `browser_specific_settings.gecko` block, which Chrome reports as an unrecognized key. The script injects it into the Firefox build only, so there is one manifest to maintain and the two builds cannot drift. Don't add that key to the root manifest by hand — the build script refuses to run if it finds one.
+Every `.js`, `.css` and `.html` file is identical in all three builds. The only difference is the manifest: Firefox requires a `browser_specific_settings.gecko` block, which Chrome and Edge report as an unrecognized key. The script injects it into the Firefox build only, so there is one manifest to maintain and the three builds cannot drift. Don't add that key to the root manifest by hand — the build script refuses to run if it finds one.
+
+The Edge build gets the root manifest verbatim, and is gated on the two things Microsoft's [porting guide](https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension) says will fail Edge certification: an `update_url` key, and the word "Chrome" in the extension `name` or `description` (Partner Center copies both fields straight into the store listing, where they're read-only). Neither is present today; the build refuses to produce an Edge package if either appears, and only the Edge target is gated.
 
 > **Load `dist\firefox\` in Firefox, not the repo root.** The root manifest has no add-on ID, and Firefox keys `storage.sync` on that ID — the extension will load and appear to work, but your saved AI prompt will silently fail to persist.
 
@@ -75,7 +92,7 @@ Open **⚙️ AI prompt settings** from the popup (or the extension's options pa
 | `{count}` | Number of exceptions captured |
 | `{url}` | The page URL |
 
-The prompt is saved via `storage.sync`, so it follows you across profiles signed into the same account — a Google account in Chrome, a Firefox Account in Firefox.
+The prompt is saved via `storage.sync`, so it follows you across profiles signed into the same account — a Google account in Chrome, a Microsoft account in Edge, a Firefox Account in Firefox.
 
 ## How detection works
 
