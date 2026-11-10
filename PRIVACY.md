@@ -6,7 +6,7 @@ This extension does not collect, transmit, or share any user data, browsing hist
 
 - All processing happens locally in your browser.
 - The only action the extension takes is reading text from the current page (when you click "Copy Exceptions", "Copy for AI", or use "Pick element") and writing that text to your local clipboard.
-- The only thing stored is your own AI prompt template — a setting you type yourself on the options page — kept in the browser's own extension storage (`chrome.storage.sync`, synced by your browser across your own signed-in profiles: a Google account in Chrome, a Microsoft account in Microsoft Edge, a Firefox Account in Firefox). No page content or activity is ever stored.
+- The only things stored are your own AI prompt template — a setting you type yourself on the options page — and your light/dark appearance choice for that page, kept in the browser's own extension storage (`chrome.storage.sync`, synced by your browser across your own signed-in profiles: a Google account in Chrome, a Microsoft account in Microsoft Edge, a Firefox Account in Firefox). No page content or activity is ever stored.
 - Nothing is sent over the network. The extension makes no network requests of its own.
 - No analytics, tracking, or telemetry of any kind is included.
 

@@ -1,115 +1,33 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Acumatica Trace Copier — Settings</title>
-<style>
-  body {
-    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    margin: 0;
-    padding: 20px;
-    max-width: 640px;
-    color: #202124;
-  }
-  h1 {
-    font-size: 16px;
-    margin: 0 0 4px;
-  }
-  .subtitle {
-    font-size: 12px;
-    color: #666;
-    margin: 0 0 18px;
-  }
-  label {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    margin: 14px 0 6px;
-  }
-  select, textarea {
-    width: 100%;
-    box-sizing: border-box;
-    font-family: inherit;
-    font-size: 13px;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-  }
-  textarea {
-    min-height: 110px;
-    resize: vertical;
-    line-height: 1.45;
-  }
-  .placeholders {
-    font-size: 12px;
-    color: #555;
-    background: #f4f6f8;
-    border-radius: 6px;
-    padding: 10px 12px;
-    margin-top: 10px;
-    line-height: 1.6;
-  }
-  .placeholders code {
-    background: #e8eaed;
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 11px;
-  }
-  .buttons {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    margin-top: 16px;
-  }
-  button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    background: #1a73e8;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  button:hover { background: #1558b3; }
-  button.secondary {
-    background: #eee;
-    color: #333;
-  }
-  button.secondary:hover { background: #ddd; }
-  #status {
-    font-size: 12px;
-    color: #188038;
-    min-height: 16px;
-  }
-</style>
-</head>
-<body>
-  <h1>🤖 Copy for AI — prompt settings</h1>
-  <p class="subtitle">This prompt is placed above the trace text when you use "Copy for AI", so the whole thing is ready to paste into Claude or any AI assistant.</p>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trace Copier options</title><link rel="stylesheet" href="options.css"></head><body><div class="shell">
+<aside class="sidebar">
+<div class="brand"><img src="icons/icon128.png" alt="" width="56" height="56"><div><span class="kicker">Acumatica</span><span class="product">Trace Copier</span><span class="by">by Acugen Consulting</span></div></div>
+<nav class="index" aria-label="Sections"><a href="#copy-for-ai"><span>01</span>Copy for AI</a><a href="#about"><span>02</span>About &amp; privacy</a><a href="#tools"><span>03</span>Other free tools</a></nav>
+<div class="sidebar-foot"><fieldset class="seg" id="theme"><legend>Appearance</legend><label><input type="radio" name="theme" value="system" checked>System</label><label><input type="radio" name="theme" value="light">Light</label><label><input type="radio" name="theme" value="dark">Dark</label></fieldset><p class="muted">Version <span id="version"></span></p></div>
+</aside>
+<main><header class="page-head"><h1>Options</h1><p class="muted">Settings are stored in this browser's own extension storage and synced across your signed-in profiles.</p></header>
+<form id="settings">
+<section class="ledger" id="copy-for-ai"><div class="ledger-head"><span class="num">01</span><h2>Copy for AI</h2><p>Copy for AI fills the placeholders from the trace grid and puts your prompt above the copied exceptions. No AI service is contacted.</p></div><div class="ledger-body">
+<label class="field"><span class="label">Prompt preset</span><select id="preset"></select></label>
+<div class="field"><div class="field-head"><label class="label" for="prompt">Your prompt</label><button id="reset" class="ghost" type="button">Restore default prompt</button></div><textarea id="prompt" spellcheck="false" required></textarea></div>
+<div class="chips" id="placeholders"><span class="muted">Insert placeholder</span><button type="button" data-placeholder="screenId">{screenId}</button><button type="button" data-placeholder="command">{command}</button><button type="button" data-placeholder="requestType">{requestType}</button><button type="button" data-placeholder="count">{count}</button><button type="button" data-placeholder="url">{url}</button></div>
+<figure class="preview"><figcaption><span>Clipboard preview</span><span class="muted">Sample values &middot; SO301000</span></figcaption><div id="prompt-preview"></div><pre id="context-preview">Acumatica Trace &mdash; 2 exception(s)
+Screen: SO301000 | Request Type: Screen | Command: RecalculatePackages
+URL: https://erp.example/Main?ScreenId=SO301000
+Captured: 2026-01-01T09:14:22.418Z
 
-  <label for="preset">Preset</label>
-  <select id="preset"></select>
-
-  <label for="prompt">Prompt</label>
-  <textarea id="prompt" spellcheck="false"></textarea>
-
-  <div class="placeholders">
-    <strong>Placeholders</strong> — filled in automatically from the trace page at copy time:<br>
-    <code>{screenId}</code> the Acumatica screen, e.g. SO301000 &nbsp;
-    <code>{command}</code> the action that ran, e.g. RecalculatePackages &nbsp;
-    <code>{requestType}</code> e.g. Screen &nbsp;
-    <code>{count}</code> number of exceptions &nbsp;
-    <code>{url}</code> the page URL
-  </div>
-
-  <div class="buttons">
-    <button id="save">Save</button>
-    <button id="reset" class="secondary">Restore default</button>
-    <span id="status"></span>
-  </div>
-
-  <script src="prompts.js"></script>
-  <script src="options.js"></script>
-</body>
-</html>
+--- Exception 1 of 2 ---
+PX.Data.PXException: Error: ...</pre></figure>
+</div></section>
+<section class="ledger" id="about"><div class="ledger-head"><span class="num">02</span><h2>About &amp; privacy</h2></div><div class="ledger-body">
+<ul class="trust"><li>Local processing</li><li>No telemetry</li><li>No credentials</li><li>No network calls</li></ul>
+<p class="muted">The extension reads the trace page you are on and writes to your clipboard. Nothing leaves your device.</p>
+<p class="muted">Unofficial, not affiliated with Acumatica, Inc.</p>
+</div></section>
+<section class="ledger" id="tools"><div class="ledger-head"><span class="num">03</span><h2>Other free tools</h2></div><div class="ledger-body tools">
+<div class="tool"><a id="power-tool" class="tool-card" target="_blank" rel="noopener noreferrer"><img src="images/power-tools.png" alt="" width="40" height="40"><span><strong>Acumatica Power Tools</strong><small class="store">Chrome Web Store</small></span></a><p class="also" data-tool="power"></p></div>
+<div class="tool"><a id="audit-tool" class="tool-card" target="_blank" rel="noopener noreferrer"><img src="images/audit-trail-analyzer.png" alt="" width="40" height="40"><span><strong>Acumatica Audit Trail Analyzer</strong><small class="store">Chrome Web Store</small></span></a><p class="also" data-tool="audit"></p></div>
+<div class="tool"><a id="website" class="tool-card" target="_blank" rel="noopener noreferrer"><span><small>Website</small><strong>acugenconsulting.com</strong></span></a></div>
+</div></section>
+<div class="savebar"><span class="dirty" id="dirty" hidden>Unsaved changes</span><p id="status" role="status"></p><button id="save" class="primary" type="submit">Save settings</button></div>
+</form></main></div><script src="prompts.js"></script><script src="options.js"></script></body></html>

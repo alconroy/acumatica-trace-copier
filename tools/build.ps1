@@ -88,8 +88,8 @@ $GeckoMinVersion = '140.0'
 # transmits (mandatory for new submissions from 2025-11-03). This extension
 # collects and transmits nothing: there is no fetch, no XHR and no network call
 # anywhere in the codebase, copied text goes only to the user's own clipboard,
-# and the saved AI prompt is browser-native storage.sync of the user's own
-# setting -- none of it leaves the device. "none" is the value Mozilla defines
+# and the saved AI prompt and appearance preference are browser-native
+# storage.sync of the user's own settings -- none of it leaves the device. "none" is the value Mozilla defines
 # for that case and it is mutually exclusive with every other value.
 #
 # This is a disclosure you are attesting to. Revisit it the moment the extension
@@ -102,6 +102,7 @@ $GeckoDataCollection = 'none'
 $PayloadFiles = @(
     'content.css',
     'content.js',
+    'options.css',
     'options.html',
     'options.js',
     'popup.html',
@@ -109,7 +110,8 @@ $PayloadFiles = @(
     'prompts.js'
 )
 $PayloadDirs = @(
-    'icons'
+    'icons',
+    'images'
 )
 
 $RepoRoot       = Split-Path -Parent $PSScriptRoot

@@ -82,7 +82,9 @@ Acumatica only renders the details panel for the row you have selected, so if th
 
 ### AI prompt settings
 
-Open **⚙️ AI prompt settings** from the popup (or the extension's options page). Choose one of the built-in presets or write your own prompt. Placeholders are filled in from the trace page at copy time:
+Open **⚙️ AI prompt settings** from the popup (or the extension's options page — it opens in its own tab). Choose one of the built-in presets or write your own prompt; a clipboard preview below the box shows the prompt with sample values filled in, and the chips insert a placeholder at the cursor. The page shares its layout with the Acumatica Developer Toolkit's options page and offers the same System/Light/Dark appearance choice.
+
+Placeholders are filled in from the trace page at copy time:
 
 | Placeholder | Filled with |
 |---|---|
