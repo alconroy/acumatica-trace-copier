@@ -12,6 +12,6 @@ This extension does not collect, transmit, or share any user data, browsing hist
 
 Host page access (`<all_urls>`) is used only so the floating "Copy Exceptions" button can detect and appear on Acumatica trace pages automatically; it is not used to read or transmit data from other sites.
 
-This is an independent, unofficial developer tool and is not affiliated with, endorsed by, or sponsored by Acumatica, Inc.
+Built and supported by Acugen Consulting, an Acumatica Services Partner. Not an Acumatica product, and not affiliated with, endorsed by, or sponsored by Acumatica, Inc.
 
 Contact: aconroy.dublin@gmail.com
